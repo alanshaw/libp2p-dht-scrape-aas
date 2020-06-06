@@ -13,6 +13,7 @@ var log = logging.Logger("dht_scrape_aas")
 
 func main() {
 	logging.SetLogLevel("dht_scrape_aas", "info")
+	logging.SetLogLevel("dht_scrape_aas_scraper", "info")
 
 	port := flag.Int("port", 3000, "port to bind the API to")
 
@@ -21,9 +22,9 @@ func main() {
 		panic(err)
 	}
 
-	// s = scraper.NewAggregatingScraper(s)
+	s = scraper.NewAggregatingScraper(s)
 
-	log.Infof("API listening on %s", fmt.Sprintf(":%v", *port))
+	log.Infof("API listening on :%v", *port)
 
 	err = server.ListenAndServe(s, fmt.Sprintf(":%v", *port))
 	if err != nil {

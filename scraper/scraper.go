@@ -18,8 +18,6 @@ import (
 	mh "github.com/multiformats/go-multihash"
 )
 
-var log = logging.Logger("dht_scrape_aas")
-
 const (
 	// totalRounds is the number of rounds performed by each host.
 	totalRounds = 15
@@ -29,7 +27,11 @@ const (
 	totalKeys = 15
 	// keySearchTimeout is the maximum time a closest peers query can run for.
 	keySearchTimeout = time.Second * 30
+	// peerStatChannelSize is the max number of buffered items in channels returned by Scrape.
+	peerStatChannelSize = 5
 )
+
+var log = logging.Logger("dht_scrape_aas_scraper")
 
 // PeerStat contains information about a seen peer.
 type PeerStat struct {
@@ -54,7 +56,7 @@ func New() (Scraper, error) {
 
 // Scrape starts a new scraping process.
 func (n *scraper) Scrape(ctx context.Context) <-chan PeerStat {
-	ch := make(chan PeerStat)
+	ch := make(chan PeerStat, peerStatChannelSize)
 
 	go func() {
 		for {
@@ -86,6 +88,7 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 			select {
 			case <-t.C:
 			case <-ctx.Done():
+				t.Stop()
 				return
 			}
 
@@ -117,11 +120,17 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 	bootstrap(ctx, h)
 
 	for i := 0; i < totalRounds; i++ {
-		log.Infof("starting scrape round %d/%d\n", i+1, totalRounds)
+		log.Infof("starting scrape round %d/%d", i+1, totalRounds)
 		if err := runScrapeRound(ctx, h, dht); err != nil {
 			return err
 		}
-		time.Sleep(roundInterval)
+		t := time.NewTimer(roundInterval)
+		select {
+		case <-t.C:
+		case <-ctx.Done():
+			t.Stop()
+			return ctx.Err()
+		}
 	}
 	return nil
 }
@@ -158,12 +167,11 @@ func runScrapeRound(ctx context.Context, h host.Host, dht *dht.IpfsDHT) error {
 	defer cancel()
 	var wg sync.WaitGroup
 	rlim := make(chan struct{}, 10)
-	log.Info("scraping")
-	scrapeRound := func(k string) {
+	scrapeRound := func(k string, i int) {
 		mctx, cancel := context.WithTimeout(ctx, keySearchTimeout)
 		defer cancel()
 		defer wg.Done()
-		defer log.Infof("finished scraping new key")
+		defer log.Infof("scraped with key #%v", i)
 		rlim <- struct{}{}
 		defer func() {
 			<-rlim
@@ -195,10 +203,10 @@ func runScrapeRound(ctx context.Context, h host.Host, dht *dht.IpfsDHT) error {
 		if err != nil {
 			return err
 		}
-		go scrapeRound(s)
+		go scrapeRound(s, i)
 	}
 	wg.Wait()
-	return nil
+	return ctx.Err()
 }
 
 func getRandomKey() (string, error) {

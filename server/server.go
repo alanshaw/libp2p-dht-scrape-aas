@@ -30,10 +30,10 @@ func peersHandler(s scraper.Scraper) func(http.ResponseWriter, *http.Request) {
 		enc := json.NewEncoder(w)
 		for pstat := range pstats {
 			enc.Encode(pstat)
-			// f, ok := w.(http.Flusher)
-			// if ok {
-			// 	f.Flush()
-			// }
+			f, ok := w.(http.Flusher)
+			if ok {
+				f.Flush()
+			}
 		}
 	}
 }
