@@ -33,7 +33,7 @@ var log = logging.Logger("dht_scrape_aas_scraper")
 // PeerStat contains information about a seen peer.
 type PeerStat struct {
 	PeerID       string   `json:"peerID"`
-	Address      string   `json:"address"`
+	Addresses    []string `json:"addresses"`
 	Protocols    []string `json:"protocols"`
 	AgentVersion string   `json:"agentVersion"`
 }
@@ -89,9 +89,14 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 				return
 			}
 
+			var addrs []string
+			for _, a := range n.Peerstore().Addrs(c.RemotePeer()) {
+				addrs = append(addrs, a.String())
+			}
+
 			pstat := PeerStat{
-				PeerID:  c.RemotePeer().String(),
-				Address: c.RemoteMultiaddr().String(),
+				PeerID:    c.RemotePeer().String(),
+				Addresses: addrs,
 			}
 
 			av, err := n.Peerstore().Get(c.RemotePeer(), "AgentVersion")

@@ -25,7 +25,7 @@ Response objects look like:
 ```json
 {
     "peerID": "QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtf3mvsqQLuvuJ",
-    "address": "/ip4/192.168.0.1/tcp/4001",
+    "addresses": ["/ip4/10.244.10.124/tcp/30800", "/ip4/159.65.73.69/tcp/30800"],
     "protocols": ["/ipfs/kad/1.0.0", "/libp2p/autonat/1.0.0", "/ipfs/bitswap/1.1.0"],
     "agentVersion": "go-ipfs/0.6.0-rc1/aa16952"
 }
