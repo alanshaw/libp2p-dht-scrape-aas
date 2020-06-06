@@ -7,14 +7,11 @@ import (
 	"sync"
 	"time"
 
-	ds "github.com/ipfs/go-datastore"
+	"github.com/alanshaw/libp2p-dht-scrape-aas/lp2p"
 	logging "github.com/ipfs/go-log/v2"
-	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	"github.com/multiformats/go-multiaddr"
 	mh "github.com/multiformats/go-multihash"
 )
 
@@ -76,7 +73,7 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	h, err := libp2p.New(ctx, libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"))
+	h, dht, err := lp2p.New(ctx, DefaultBootstrapAddrs)
 	if err != nil {
 		return err
 	}
@@ -113,12 +110,6 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 		},
 	})
 
-	log.Infof("created peer with addrs %v", h.Addrs())
-
-	dht := dht.NewDHT(ctx, h, ds.NewMapDatastore())
-
-	bootstrap(ctx, h)
-
 	for i := 0; i < totalRounds; i++ {
 		log.Infof("starting scrape round %d/%d", i+1, totalRounds)
 		if err := runScrapeRound(ctx, h, dht); err != nil {
@@ -133,33 +124,6 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 		}
 	}
 	return nil
-}
-
-func bootstrap(ctx context.Context, h host.Host) {
-	var wg sync.WaitGroup
-	for _, addr := range DefaultBootstrapAddrs {
-		wg.Add(1)
-		go func(addr string) {
-			defer wg.Done()
-
-			ma, err := multiaddr.NewMultiaddr(addr)
-			if err != nil {
-				log.Error(err)
-				return
-			}
-
-			ai, err := peer.AddrInfoFromP2pAddr(ma)
-			if err != nil {
-				log.Error(err)
-				return
-			}
-
-			if err := h.Connect(ctx, *ai); err != nil {
-				log.Error(addr, err)
-			}
-		}(addr)
-	}
-	wg.Wait()
 }
 
 func runScrapeRound(ctx context.Context, h host.Host, dht *dht.IpfsDHT) error {

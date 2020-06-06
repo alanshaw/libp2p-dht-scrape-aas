@@ -13,6 +13,7 @@ var log = logging.Logger("dht_scrape_aas")
 
 func main() {
 	logging.SetLogLevel("dht_scrape_aas", "info")
+	logging.SetLogLevel("dht_scrape_aas_lp2p", "info")
 	logging.SetLogLevel("dht_scrape_aas_scraper", "info")
 
 	port := flag.Int("port", 3000, "port to bind the API to")
