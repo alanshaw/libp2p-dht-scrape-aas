@@ -6,11 +6,11 @@ The scraping implementation was heavily ~~inspired~~ stolen from [whyrusleeping/
 
 ## Install
 
-No need to install, you can just request scrapings from the HTTP API. Send a `GET` request to `/peers` to receive an [ndjson](http://ndjson.org/) response that streams peers as they connect to the scraper.
+No need to install, you can just request scrapings from the [HTTP API](#api). Send a `GET` request to `/peers` to receive an [ndjson](http://ndjson.org/) response that streams peers as they connect to the scraper.
 
 ## Usage
 
-See the API section below for details on API methods available.
+See the [API section](#api) below for details on HTTP API methods available.
 
 For developers, simply clone this repo and start the scraper with `go run ./main.go`. The HTTP API is available by default at http://localhost:3000.
 
