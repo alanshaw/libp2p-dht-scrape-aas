@@ -26,6 +26,7 @@ func NewServer(s scraper.Scraper) *http.ServeMux {
 func peersHandler(s scraper.Scraper) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
 		pstats := s.Scrape(r.Context())
 		enc := json.NewEncoder(w)
 		for pstat := range pstats {
