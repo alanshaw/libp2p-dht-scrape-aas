@@ -1,6 +1,6 @@
 # libp2p DHT scrape aaS
 
-A libp2p DHT scraper run as a service allowing anyone to collect, consume and use to generate useful data and visualisations.
+A libp2p DHT scraper run as a service allowing anyone to collect, consume and use to generate useful reports and visualisations.
 
 **http://dht.scrape.stream/peers**
 
