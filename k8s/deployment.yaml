@@ -20,7 +20,7 @@ spec:
       containers:
       - name: scraper-container
         image: docker.io/alanshaw/libp2p-dht-scrape-aas
-        resources:
-          limits:
-            memory: 1Gi
+        # resources:
+        #   limits:
+        #     memory: 1Gi
   

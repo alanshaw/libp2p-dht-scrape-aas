@@ -2,6 +2,8 @@
 
 A libp2p DHT scraper run as a service allowing anyone to collect, consume and use to generate useful data and visualisations.
 
+**http://dht.scrape.stream/peers**
+
 The scraping implementation was heavily ~~inspired~~ stolen from [whyrusleeping/ipfs-counter](https://github.com/whyrusleeping/ipfs-counter).
 
 ## Install
@@ -33,6 +35,8 @@ docker push alanshaw/libp2p-dht-scrape-aas
 ```
 
 ## API
+
+The public API is available at http://dht.scrape.stream
 
 ### `GET /peers`
 
