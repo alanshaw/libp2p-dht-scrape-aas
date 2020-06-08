@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: scraper
+  name: scraper-deployment
+  namespace: libp2p-dht-scrape-aas
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scraper
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: scraper
+    spec:
+      containers:
+      - name: scraper-container
+        image: docker.io/alanshaw/libp2p-dht-scrape-aas
+        resources:
+          limits:
+            memory: 1Gi
+  

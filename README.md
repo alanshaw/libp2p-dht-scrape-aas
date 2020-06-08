@@ -12,7 +12,25 @@ No need to install, you can just request scrapings from the [HTTP API](#api). Se
 
 See the [API section](#api) below for details on HTTP API methods available.
 
+### Developers
+
 For developers, simply clone this repo and start the scraper with `go run ./main.go`. The HTTP API is available by default at http://localhost:3000.
+
+#### Publish a new Docker image
+
+```sh
+# Build your container
+docker build -t libp2p-dht-scrape-aas .
+
+# Get it to run
+docker run libp2p-dht-scrape-aas
+
+# Commit new version
+docker commit -m="some commit message" <CONTAINER_ID> alanshaw/libp2p-dht-scrape-aas
+
+# Push to docker hub (must be logged in, do docker login)
+docker push alanshaw/libp2p-dht-scrape-aas
+```
 
 ## API
 
