@@ -10,8 +10,9 @@ import (
 	"github.com/alanshaw/libp2p-dht-scrape-aas/lp2p"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p-core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	peerstore "github.com/libp2p/go-libp2p-peerstore"
 	mh "github.com/multiformats/go-multihash"
 )
 
@@ -26,6 +27,8 @@ const (
 	keySearchTimeout = time.Second * 30
 	// peerStatChannelSize is the max number of buffered items in channels returned by Scrape.
 	peerStatChannelSize = 5
+	// peerUpdatedDebouncePeriod is the debounce period for when a peer is updated.
+	peerUpdatedDebouncePeriod = time.Millisecond * 100
 )
 
 var log = logging.Logger("dht_scrape_aas_scraper")
@@ -69,51 +72,70 @@ func (n *scraper) Scrape(ctx context.Context) <-chan PeerStat {
 	return ch
 }
 
+func debounce(ctx context.Context, f lp2p.PeerUpdatedF, p time.Duration) lp2p.PeerUpdatedF {
+	type peerUpdatedData struct {
+		pstore      peerstore.Peerstore
+		peerUpdated lp2p.PeerUpdatedF
+	}
+	l := sync.Mutex{}
+	m := make(map[peer.ID]*peerUpdatedData)
+	return func(pstore peerstore.Peerstore, peerID peer.ID) {
+		l.Lock()
+		defer l.Unlock()
+		d, ok := m[peerID]
+		if ok {
+			d.peerUpdated = f
+			return
+		}
+		t := time.NewTimer(p)
+		d = &peerUpdatedData{pstore, f}
+		m[peerID] = d
+		go func() {
+			select {
+			case <-t.C:
+				l.Lock()
+				delete(m, peerID)
+				l.Unlock()
+				d.peerUpdated(d.pstore, peerID)
+			case <-ctx.Done():
+				t.Stop()
+			}
+		}()
+	}
+}
+
 func runScrape(ctx context.Context, ch chan PeerStat) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	h, dht, err := lp2p.New(ctx, DefaultBootstrapAddrs)
+	h, dht, err := lp2p.New(ctx, DefaultBootstrapAddrs, debounce(ctx, func(pstore peerstore.Peerstore, peerID peer.ID) {
+		var addrs []string
+		for _, a := range pstore.Addrs(peerID) {
+			addrs = append(addrs, a.String())
+		}
+
+		pstat := PeerStat{
+			PeerID:    peerID.String(),
+			Addresses: addrs,
+		}
+
+		av, err := pstore.Get(peerID, "AgentVersion")
+		if err == nil {
+			pstat.AgentVersion = fmt.Sprint(av)
+		}
+
+		protos, _ := pstore.GetProtocols(peerID)
+		pstat.Protocols = protos
+
+		select {
+		case ch <- pstat:
+		default:
+			log.Warn("dropped peer stat due to full channel", pstat)
+		}
+	}, peerUpdatedDebouncePeriod))
 	if err != nil {
 		return err
 	}
-
-	h.Network().Notify(&network.NotifyBundle{
-		ConnectedF: func(n network.Network, c network.Conn) {
-			// wait for the info to get into the peerstore...
-			t := time.NewTimer(time.Second)
-			select {
-			case <-t.C:
-			case <-ctx.Done():
-				t.Stop()
-				return
-			}
-
-			var addrs []string
-			for _, a := range n.Peerstore().Addrs(c.RemotePeer()) {
-				addrs = append(addrs, a.String())
-			}
-
-			pstat := PeerStat{
-				PeerID:    c.RemotePeer().String(),
-				Addresses: addrs,
-			}
-
-			av, err := n.Peerstore().Get(c.RemotePeer(), "AgentVersion")
-			if err == nil {
-				pstat.AgentVersion = fmt.Sprint(av)
-			}
-
-			protos, _ := n.Peerstore().GetProtocols(c.RemotePeer())
-			pstat.Protocols = protos
-
-			select {
-			case ch <- pstat:
-			default:
-				log.Warn("dropped peer stat due to full channel", pstat)
-			}
-		},
-	})
 
 	for i := 0; i < totalRounds; i++ {
 		log.Infof("starting scrape round %d/%d", i+1, totalRounds)
