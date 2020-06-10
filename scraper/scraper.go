@@ -10,7 +10,8 @@ import (
 	"github.com/alanshaw/libp2p-dht-scrape-aas/lp2p"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	mh "github.com/multiformats/go-multihash"
 )
@@ -25,7 +26,15 @@ const (
 	// keySearchTimeout is the maximum time a closest peers query can run for.
 	keySearchTimeout = time.Second * 30
 	// peerStatChannelSize is the max number of buffered items in channels returned by Scrape.
-	peerStatChannelSize = 5
+	peerStatChannelSize = 100
+	// peerUpdatedDebouncePeriod is the debounce period for when a peer is updated.
+	// From testing:
+	// 0 debounces (473 times) ready on average 0s
+	// 1 debounces (420 times) ready on average 1.188270601s
+	// 2 debounces (217 times) ready on average 2.626265233s
+	// 3 debounces (195 times) ready on average 2.831655062s
+	// 4 debounces (65 times) ready on average 6.235750843s
+	peerUpdatedDebouncePeriod = time.Second * 3
 )
 
 var log = logging.Logger("dht_scrape_aas_scraper")
@@ -73,47 +82,36 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	h, dht, err := lp2p.New(ctx, DefaultBootstrapAddrs)
+	peerUpdated := debouncePeerUpdated(ctx, func(pstore peerstore.Peerstore, peerID peer.ID) {
+		var addrs []string
+		for _, a := range pstore.Addrs(peerID) {
+			addrs = append(addrs, a.String())
+		}
+
+		pstat := PeerStat{
+			PeerID:    peerID.String(),
+			Addresses: addrs,
+		}
+
+		av, err := pstore.Get(peerID, "AgentVersion")
+		if err == nil {
+			pstat.AgentVersion = fmt.Sprint(av)
+		}
+
+		protos, _ := pstore.GetProtocols(peerID)
+		pstat.Protocols = protos
+
+		select {
+		case ch <- pstat:
+		default:
+			log.Warn("dropped peer stat due to full channel", pstat)
+		}
+	}, peerUpdatedDebouncePeriod)
+
+	h, dht, err := lp2p.New(ctx, DefaultBootstrapAddrs, peerUpdated)
 	if err != nil {
 		return err
 	}
-
-	h.Network().Notify(&network.NotifyBundle{
-		ConnectedF: func(n network.Network, c network.Conn) {
-			// wait for the info to get into the peerstore...
-			t := time.NewTimer(time.Second)
-			select {
-			case <-t.C:
-			case <-ctx.Done():
-				t.Stop()
-				return
-			}
-
-			var addrs []string
-			for _, a := range n.Peerstore().Addrs(c.RemotePeer()) {
-				addrs = append(addrs, a.String())
-			}
-
-			pstat := PeerStat{
-				PeerID:    c.RemotePeer().String(),
-				Addresses: addrs,
-			}
-
-			av, err := n.Peerstore().Get(c.RemotePeer(), "AgentVersion")
-			if err == nil {
-				pstat.AgentVersion = fmt.Sprint(av)
-			}
-
-			protos, _ := n.Peerstore().GetProtocols(c.RemotePeer())
-			pstat.Protocols = protos
-
-			select {
-			case ch <- pstat:
-			default:
-				log.Warn("dropped peer stat due to full channel", pstat)
-			}
-		},
-	})
 
 	for i := 0; i < totalRounds; i++ {
 		log.Infof("starting scrape round %d/%d", i+1, totalRounds)
@@ -129,6 +127,34 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 		}
 	}
 	return nil
+}
+
+func debouncePeerUpdated(ctx context.Context, peerUpdated lp2p.PeerUpdatedF, period time.Duration) lp2p.PeerUpdatedF {
+	l := sync.Mutex{}
+	m := make(map[peer.ID]bool)
+
+	return func(pstore peerstore.Peerstore, peerID peer.ID) {
+		l.Lock()
+		defer l.Unlock()
+
+		if m[peerID] {
+			return
+		}
+		m[peerID] = true
+
+		t := time.NewTimer(period)
+		go func() {
+			select {
+			case <-t.C:
+				l.Lock()
+				delete(m, peerID)
+				l.Unlock()
+				peerUpdated(pstore, peerID)
+			case <-ctx.Done():
+				t.Stop()
+			}
+		}()
+	}
 }
 
 func runScrapeRound(ctx context.Context, h host.Host, dht *dht.IpfsDHT) error {
