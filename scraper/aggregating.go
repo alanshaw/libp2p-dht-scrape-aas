@@ -6,7 +6,7 @@ import (
 )
 
 // aggregatingPeerStatChannelSize is the max number of buffered items in channels returned by Scrape.
-const aggregatingPeerStatChannelSize = 5
+const aggregatingPeerStatChannelSize = 50
 
 type aggregatingScraper struct {
 	Scraper

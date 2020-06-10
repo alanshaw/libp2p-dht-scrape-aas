@@ -11,8 +11,8 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peerstore"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	peerstore "github.com/libp2p/go-libp2p-peerstore"
 	mh "github.com/multiformats/go-multihash"
 )
 
@@ -26,9 +26,15 @@ const (
 	// keySearchTimeout is the maximum time a closest peers query can run for.
 	keySearchTimeout = time.Second * 30
 	// peerStatChannelSize is the max number of buffered items in channels returned by Scrape.
-	peerStatChannelSize = 5
+	peerStatChannelSize = 100
 	// peerUpdatedDebouncePeriod is the debounce period for when a peer is updated.
-	peerUpdatedDebouncePeriod = time.Millisecond * 100
+	// From testing:
+	// 0 debounces (473 times) ready on average 0s
+	// 1 debounces (420 times) ready on average 1.188270601s
+	// 2 debounces (217 times) ready on average 2.626265233s
+	// 3 debounces (195 times) ready on average 2.831655062s
+	// 4 debounces (65 times) ready on average 6.235750843s
+	peerUpdatedDebouncePeriod = time.Second * 3
 )
 
 var log = logging.Logger("dht_scrape_aas_scraper")
@@ -72,43 +78,11 @@ func (n *scraper) Scrape(ctx context.Context) <-chan PeerStat {
 	return ch
 }
 
-func debounce(ctx context.Context, f lp2p.PeerUpdatedF, p time.Duration) lp2p.PeerUpdatedF {
-	type peerUpdatedData struct {
-		pstore      peerstore.Peerstore
-		peerUpdated lp2p.PeerUpdatedF
-	}
-	l := sync.Mutex{}
-	m := make(map[peer.ID]*peerUpdatedData)
-	return func(pstore peerstore.Peerstore, peerID peer.ID) {
-		l.Lock()
-		defer l.Unlock()
-		d, ok := m[peerID]
-		if ok {
-			d.peerUpdated = f
-			return
-		}
-		t := time.NewTimer(p)
-		d = &peerUpdatedData{pstore, f}
-		m[peerID] = d
-		go func() {
-			select {
-			case <-t.C:
-				l.Lock()
-				delete(m, peerID)
-				l.Unlock()
-				d.peerUpdated(d.pstore, peerID)
-			case <-ctx.Done():
-				t.Stop()
-			}
-		}()
-	}
-}
-
 func runScrape(ctx context.Context, ch chan PeerStat) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	h, dht, err := lp2p.New(ctx, DefaultBootstrapAddrs, debounce(ctx, func(pstore peerstore.Peerstore, peerID peer.ID) {
+	peerUpdated := debouncePeerUpdated(ctx, func(pstore peerstore.Peerstore, peerID peer.ID) {
 		var addrs []string
 		for _, a := range pstore.Addrs(peerID) {
 			addrs = append(addrs, a.String())
@@ -132,7 +106,9 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 		default:
 			log.Warn("dropped peer stat due to full channel", pstat)
 		}
-	}, peerUpdatedDebouncePeriod))
+	}, peerUpdatedDebouncePeriod)
+
+	h, dht, err := lp2p.New(ctx, DefaultBootstrapAddrs, peerUpdated)
 	if err != nil {
 		return err
 	}
@@ -151,6 +127,43 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 		}
 	}
 	return nil
+}
+
+func debouncePeerUpdated(ctx context.Context, f lp2p.PeerUpdatedF, p time.Duration) lp2p.PeerUpdatedF {
+	type peerUpdatedData struct {
+		pstore      peerstore.Peerstore
+		peerUpdated lp2p.PeerUpdatedF
+	}
+
+	l := sync.Mutex{}
+	m := make(map[peer.ID]*peerUpdatedData)
+
+	return func(pstore peerstore.Peerstore, peerID peer.ID) {
+		l.Lock()
+		defer l.Unlock()
+
+		d, ok := m[peerID]
+		if ok {
+			d.peerUpdated = f
+			return
+		}
+
+		t := time.NewTimer(p)
+		d = &peerUpdatedData{pstore, f}
+		m[peerID] = d
+
+		go func() {
+			select {
+			case <-t.C:
+				l.Lock()
+				delete(m, peerID)
+				l.Unlock()
+				d.peerUpdated(d.pstore, peerID)
+			case <-ctx.Done():
+				t.Stop()
+			}
+		}()
+	}
 }
 
 func runScrapeRound(ctx context.Context, h host.Host, dht *dht.IpfsDHT) error {
