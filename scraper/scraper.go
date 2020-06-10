@@ -129,36 +129,27 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 	return nil
 }
 
-func debouncePeerUpdated(ctx context.Context, f lp2p.PeerUpdatedF, p time.Duration) lp2p.PeerUpdatedF {
-	type peerUpdatedData struct {
-		pstore      peerstore.Peerstore
-		peerUpdated lp2p.PeerUpdatedF
-	}
-
+func debouncePeerUpdated(ctx context.Context, peerUpdated lp2p.PeerUpdatedF, period time.Duration) lp2p.PeerUpdatedF {
 	l := sync.Mutex{}
-	m := make(map[peer.ID]*peerUpdatedData)
+	m := make(map[peer.ID]bool)
 
 	return func(pstore peerstore.Peerstore, peerID peer.ID) {
 		l.Lock()
 		defer l.Unlock()
 
-		d, ok := m[peerID]
-		if ok {
-			d.peerUpdated = f
+		if m[peerID] {
 			return
 		}
+		m[peerID] = true
 
-		t := time.NewTimer(p)
-		d = &peerUpdatedData{pstore, f}
-		m[peerID] = d
-
+		t := time.NewTimer(period)
 		go func() {
 			select {
 			case <-t.C:
 				l.Lock()
 				delete(m, peerID)
 				l.Unlock()
-				d.peerUpdated(d.pstore, peerID)
+				peerUpdated(pstore, peerID)
 			case <-ctx.Done():
 				t.Stop()
 			}
