@@ -8,7 +8,7 @@ The scraping implementation was heavily ~~inspired~~ stolen from [whyrusleeping/
 
 ## Install
 
-No need to install, you can just request scrapings from the [HTTP API](#api). Send a `GET` request to `/peers` to receive an [ndjson](http://ndjson.org/) response that streams peers as they connect to the scraper.
+No need to install, you can just request scrapings from the [HTTP API](#api). Send a `GET` request to `/peers` to receive an [ndjson](http://ndjson.org/) response that streams peers as they are seen by the scraper.
 
 ## Usage
 
@@ -40,7 +40,7 @@ The public API is available at http://dht.scrape.stream
 
 ### `GET /peers`
 
-Returns an [ndjson](http://ndjson.org/) response that streams peers as they connect to the scraper. **Note**: you will see the same peer multiple times! The scraper creates many libp2p hosts with different peer IDs in order to survey a larger area of the DHT. It is stateless and only reports the information it discovers as it does so. It is up to you to collect and process the raw data.
+Returns an [ndjson](http://ndjson.org/) response that streams peers as they are seen by the scraper. **Note**: you will see the same peer multiple times! The scraper creates many libp2p hosts with different peer IDs in order to survey a larger area of the DHT. It is stateless and only reports the information it discovers as it does so. It is up to you to collect and process the raw data.
 
 Response objects look like:
 
@@ -52,6 +52,8 @@ Response objects look like:
     "agentVersion": "go-ipfs/0.6.0-rc1/aa16952"
 }
 ```
+
+**Note:** `agentVersion` and `protocols` may be `""`/`[]` respectively if the scraper did not connect to the peer yet.
 
 ## Contribute
 
