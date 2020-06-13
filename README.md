@@ -6,6 +6,12 @@ A libp2p DHT scraper run as a service allowing anyone to collect, consume and us
 
 The scraping implementation was heavily ~~inspired~~ stolen from [whyrusleeping/ipfs-counter](https://github.com/whyrusleeping/ipfs-counter).
 
+This scraper works by first creating a libp2p host with a random peer ID. It then generates a random key and sends a `FIND_NODE` request in order to get a list of peers that are "closest" to the key. This is done muliple times and then the libp2p host is shutdown. A _new_ libp2p host with a random peer ID is then created and the cycle continues (...and it does not end).
+
+The scraper hooks into the libp2p node's peerstore so that it can stream peer information as they are encountered. It exposes a HTTP endpoint where this information can be accessed.
+
+**Note:** Peers may be encountered multiple times and may report _less information_ in a future encounter due to them being discovered but not connected to.
+
 ## Install
 
 No need to install, you can just request scrapings from the [HTTP API](#api). Send a `GET` request to `/peers` to receive an [ndjson](http://ndjson.org/) response that streams peers as they are seen by the scraper.
