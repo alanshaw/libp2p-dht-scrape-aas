@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	hook "github.com/alanshaw/ipfs-hookds"
 	"github.com/alanshaw/libp2p-dht-scrape-aas/version"
@@ -42,7 +43,12 @@ func New(ctx context.Context, bootstrapAddrs []string, peerUpdated PeerUpdatedF)
 	}
 	pstoreDs := hook.NewBatching(dssync.MutexWrap(ds.NewMapDatastore()), hook.WithAfterPut(afterPut))
 
-	pstore, err := pstoreds.NewPeerstore(ctx, pstoreDs, pstoreds.DefaultOpts())
+	pstore, err := pstoreds.NewPeerstore(ctx, pstoreDs, pstoreds.Options{
+		CacheSize:           0,
+		GCPurgeInterval:     0,
+		GCLookaheadInterval: 0,
+		GCInitialDelay:      60 * time.Second,
+	})
 	if err != nil {
 		return nil, nil, err
 	}
