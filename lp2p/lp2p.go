@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	hook "github.com/alanshaw/ipfs-hookds"
+	"github.com/alanshaw/libp2p-dht-scrape-aas/version"
 	ds "github.com/ipfs/go-datastore"
 	dssync "github.com/ipfs/go-datastore/sync"
 	logging "github.com/ipfs/go-log/v2"
@@ -15,6 +16,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
+	quic "github.com/libp2p/go-libp2p-quic-transport"
+	"github.com/libp2p/go-tcp-transport"
 	"github.com/multiformats/go-base32"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -46,8 +49,11 @@ func New(ctx context.Context, bootstrapAddrs []string, peerUpdated PeerUpdatedF)
 
 	h, err := libp2p.New(
 		ctx,
+		libp2p.UserAgent(version.UserAgent),
 		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"),
 		libp2p.Peerstore(pstore),
+		libp2p.Transport(quic.NewTransport),
+		libp2p.Transport(tcp.NewTCPTransport),
 	)
 	if err != nil {
 		return nil, nil, err
