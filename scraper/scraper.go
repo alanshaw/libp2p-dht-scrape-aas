@@ -112,6 +112,13 @@ func runScrape(ctx context.Context, ch chan PeerStat) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		log.Info("closing host...")
+		err := h.Close()
+		if err != nil {
+			log.Errorf("closing host: %w", err)
+		}
+	}()
 
 	for i := 0; i < totalRounds; i++ {
 		log.Infof("starting scrape round %d/%d", i+1, totalRounds)
