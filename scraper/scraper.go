@@ -26,7 +26,7 @@ const (
 	// keySearchTimeout is the maximum time a closest peers query can run for.
 	keySearchTimeout = time.Second * 30
 	// peerStatChannelSize is the max number of buffered items in channels returned by Scrape.
-	peerStatChannelSize = 100
+	peerStatChannelSize = 1000
 	// peerUpdatedDebouncePeriod is the debounce period for when a peer is updated.
 	// From testing:
 	// 0 debounces (473 times) ready on average 0s
