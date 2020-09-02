@@ -16,9 +16,12 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/peerstore"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	noise "github.com/libp2p/go-libp2p-noise"
 	"github.com/libp2p/go-libp2p-peerstore/pstoreds"
 	quic "github.com/libp2p/go-libp2p-quic-transport"
+	tls "github.com/libp2p/go-libp2p-tls"
 	"github.com/libp2p/go-tcp-transport"
+	ws "github.com/libp2p/go-ws-transport"
 	"github.com/multiformats/go-base32"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -60,6 +63,9 @@ func New(ctx context.Context, bootstrapAddrs []string, peerUpdated PeerUpdatedF)
 		libp2p.Peerstore(pstore),
 		libp2p.Transport(quic.NewTransport),
 		libp2p.Transport(tcp.NewTCPTransport),
+		libp2p.Transport(ws.New),
+		libp2p.Security(tls.ID, tls.New),
+		libp2p.Security(noise.ID, noise.New),
 	)
 	if err != nil {
 		return nil, nil, err
