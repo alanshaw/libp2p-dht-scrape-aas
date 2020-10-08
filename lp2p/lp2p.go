@@ -24,6 +24,7 @@ import (
 	ws "github.com/libp2p/go-ws-transport"
 	"github.com/multiformats/go-base32"
 	"github.com/multiformats/go-multiaddr"
+	secio "github.com/libp2p/go-libp2p-secio"
 )
 
 var (
@@ -66,6 +67,7 @@ func New(ctx context.Context, bootstrapAddrs []string, peerUpdated PeerUpdatedF)
 		libp2p.Transport(ws.New),
 		libp2p.Security(tls.ID, tls.New),
 		libp2p.Security(noise.ID, noise.New),
+		libp2p.Security(secio.ID, secio.New),
 	)
 	if err != nil {
 		return nil, nil, err
